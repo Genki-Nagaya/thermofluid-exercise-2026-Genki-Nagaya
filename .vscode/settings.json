@@ -1,0 +1,13 @@
+{
+  "[julia]": {
+    "editor.defaultFormatter": "julialang.language-julia",
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4
+  },
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "julia.lint.run": true
+}

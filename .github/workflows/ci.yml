@@ -1,0 +1,33 @@
+name: Student CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: student-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.13.0'
+
+      - name: Cache Julia dependencies
+        uses: julia-actions/cache@v2
+
+      - name: Instantiate environment
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(; allow_autoprecomp=false)'
+
+      - name: Run tests
+        run: julia --startup-file=no --project=. test/runtests.jl
