@@ -4,7 +4,8 @@ end
 
 module F04NumericalDifferentiation
 
-using Main.F03VectorCalculus: gradient_scalar, curl_vector, laplacian_scalar
+using Main.F03VectorCalculus: scalar_field, vector_field, gradient_scalar, curl_vector,
+    divergence_vector, gradient_divergence_vector, laplacian_vector
 
 export forward_difference,
     backward_difference,
@@ -13,7 +14,8 @@ export forward_difference,
     centered_partial,
     curl_gradient_residual,
     divergence_curl_residual,
-    laplacian_identity_residual,
+    product_divergence_residual,
+    curl_curl_residual,
     verify_vector_identities
 
 function validate_scalar_input(x, h)
@@ -113,12 +115,27 @@ function divergence_curl_residual(point, h)
     sum(centered_partial(p -> curl_vector(p)[axis], point, axis, h) for axis in 1:3)
 end
 
-# The supplied analytic gradient and Laplacian are used with the student's outer centered difference.
-# The inner gradient and Laplacian are not student work in this residual calculation.
-function laplacian_identity_residual(point, h)
+# Differentiate the product field numerically and evaluate the right-hand side analytically.
+function product_divergence_residual(point, h)
     validate_point(point)
-    sum(centered_partial(p -> gradient_scalar(p)[axis], point, axis, h) for axis in 1:3) -
-    laplacian_scalar(point)
+    lhs = sum(centered_partial(p -> scalar_field(p) * vector_field(p)[axis],
+        point, axis, h) for axis in 1:3)
+    rhs = sum(vector_field(point) .* gradient_scalar(point)) +
+        scalar_field(point) * divergence_vector(point)
+    lhs - rhs
+end
+
+function curl_curl_residual(point, h)
+    validate_point(point)
+    lhs = (
+        centered_partial(p -> curl_vector(p)[3], point, 2, h) -
+        centered_partial(p -> curl_vector(p)[2], point, 3, h),
+        centered_partial(p -> curl_vector(p)[1], point, 3, h) -
+        centered_partial(p -> curl_vector(p)[3], point, 1, h),
+        centered_partial(p -> curl_vector(p)[2], point, 1, h) -
+        centered_partial(p -> curl_vector(p)[1], point, 2, h),
+    )
+    lhs .- (gradient_divergence_vector(point) .- laplacian_vector(point))
 end
 
 function verify_vector_identities(n)
@@ -128,18 +145,19 @@ function verify_vector_identities(n)
     h = step(coordinates)
     curl_gradient = 0.0
     divergence_curl = 0.0
-    laplacian_identity = 0.0
-    for x in coordinates[2:(end - 1)],
-        y in coordinates[2:(end - 1)],
-        z in coordinates[2:(end - 1)]
+    product_divergence = 0.0
+    curl_curl = 0.0
+    # Compare maxima on a common physical region as the grid is refined.
+    interior = filter(x -> abs(x) <= 0.75, coordinates[2:(end - 1)])
+    for x in interior, y in interior, z in interior
 
         point = (x, y, z)
         curl_gradient = max(curl_gradient, maximum(abs, curl_gradient_residual(point, h)))
         divergence_curl = max(divergence_curl, abs(divergence_curl_residual(point, h)))
-        laplacian_identity =
-            max(laplacian_identity, abs(laplacian_identity_residual(point, h)))
+        product_divergence = max(product_divergence, abs(product_divergence_residual(point, h)))
+        curl_curl = max(curl_curl, maximum(abs, curl_curl_residual(point, h)))
     end
-    (; curl_gradient, divergence_curl, laplacian_identity)
+    (; curl_gradient, divergence_curl, product_divergence, curl_curl)
 end
 
 end

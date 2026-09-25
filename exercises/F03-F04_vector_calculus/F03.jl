@@ -1,13 +1,14 @@
 module F03VectorCalculus
 
-export gradient_scalar, curl_vector, laplacian_scalar
+export scalar_field, vector_field, gradient_scalar, curl_vector, laplacian_scalar,
+    divergence_vector, gradient_divergence_vector, laplacian_vector
 
 scalar_field(point) = sin(point[1]) * cos(point[2]) * exp(point[3])
 
 vector_field(point) = (
-    sin(point[2]) * exp(point[3]),
-    sin(point[3]) * exp(point[1]),
-    sin(point[1]) * exp(point[2]),
+    sin(point[2]) * exp(2point[3]) + exp(point[1]),
+    sin(point[3]) * exp(2point[1]) + exp(point[2]),
+    sin(point[1]) * exp(2point[2]) + exp(point[3]),
 )
 
 function validate_point(point)
@@ -30,15 +31,33 @@ end
 function curl_vector(point)
     validate_point(point)
     (
-        sin(point[1]) * exp(point[2]) - cos(point[3]) * exp(point[1]),
-        sin(point[2]) * exp(point[3]) - cos(point[1]) * exp(point[2]),
-        sin(point[3]) * exp(point[1]) - cos(point[2]) * exp(point[3]),
+        2sin(point[1]) * exp(2point[2]) - cos(point[3]) * exp(2point[1]),
+        2sin(point[2]) * exp(2point[3]) - cos(point[1]) * exp(2point[2]),
+        2sin(point[3]) * exp(2point[1]) - cos(point[2]) * exp(2point[3]),
     )
 end
 
 function laplacian_scalar(point)
     validate_point(point)
     -scalar_field(point)
+end
+
+function divergence_vector(point)
+    validate_point(point)
+    sum(exp, point)
+end
+
+function gradient_divergence_vector(point)
+    validate_point(point)
+    exp.(point)
+end
+
+function laplacian_vector(point)
+    validate_point(point)
+    x, y, z = point
+    (3sin(y) * exp(2z) + exp(x),
+     3sin(z) * exp(2x) + exp(y),
+     3sin(x) * exp(2y) + exp(z))
 end
 
 end
