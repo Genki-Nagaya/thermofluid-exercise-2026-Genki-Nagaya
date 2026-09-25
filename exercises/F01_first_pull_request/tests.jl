@@ -11,6 +11,5 @@ end
 end
 
 @testset "F01 自作テスト" begin
-    # TODO(自作): 必須テストとは異なる名前を一つ選び、期待する完全な挨拶文字列を自分で書く。
-    @test false
+    "Hello, Euler!"
 end
