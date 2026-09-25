@@ -12,18 +12,23 @@ end
 
 function mean_temperature(values::AbstractVector{<:Real})
     validate_temperatures(values)
-    # TODO(F02): すべての値の合計を求め、要素数で割る。
-    zero(float(first(values)))
+    total = zero(float(first(values)))
+    for v in values
+        total += v
+    end
+    return total / length(values)
 end
 
 function temperature_anomaly(values::AbstractVector{<:Real})
     validate_temperatures(values)
-    # TODO(F02): `value - mean_temperature(values)`を要素とする新しい配列を返す。
-    collect(values)
+    m = mean_temperature(values)
+    result = similar(values, typeof(m))
+    for i in eachindex(values)
+        result[i]=values[i]-m
+    end
+    return result
 end
-
 end
-
 
 if abspath(PROGRAM_FILE) == @__FILE__
     sample = [18.0, 20.0, 22.0]

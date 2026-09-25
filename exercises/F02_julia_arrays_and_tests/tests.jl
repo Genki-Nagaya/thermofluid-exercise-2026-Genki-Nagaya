@@ -17,6 +17,16 @@ end
 end
 
 @testset "F02 自作テスト" begin
-    # TODO(自作): 戻り値の型、別の数学的性質、または必須とは異なる不正入力から一つ選び、入力と期待値を自分で書く。
-    @test false
+    M=F02JuliaArraysAndTests
+    ints=[10, 20, 30]
+    @test M.mean_temperature(ints)===20.0
+    @test M.temperature_anomaly(ints)==[-10.0, 0.0, 10.0]
+    @test eltype(M.temperature_anomaly(ints))==Float64
+
+    f32=Float32[1, 2, 4]
+    @test M.mean_temperature(f32) isa Float32
+    @test eltype(M.temperature_anomaly(f32))==Float32
+
+    @test_throws ArgumentError M.mean_temperature([1.0, NaN])
+    @test_throws ArgumentError M.mean_temperature([1.0, Inf])
 end
