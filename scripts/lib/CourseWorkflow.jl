@@ -3,7 +3,7 @@ module CourseWorkflow
 using TOML
 
 export ORDERED_UNITS, TASK_IDS_BY_UNIT, ProgressState, load_progress, save_progress,
-       tests_to_run, validate_transition, UNIT_DIRECTORIES, unit_directory, units_to_test
+       tests_to_run, validate_transition, UNIT_DIRECTORIES, unit_directory, units_to_test, require_unit_assets
 
 const ORDERED_UNITS = [
     "F00", "F01", "F02", "F03-F04",
@@ -106,6 +106,34 @@ const UNIT_DIRECTORIES = Dict(
 
 unit_directory(id) = joinpath("exercises", UNIT_DIRECTORIES[id])
 
+function require_unit_assets(root, id)
+    missing = String[]
+    directory = unit_directory(id)
+    required = ["run.jl", "tests.jl", "learning_log.md"]
+    id == "F03-F04" && push!(required, "F03.jl")
+    id in ("N01", "N02", "N03", "N04") && push!(required, "provided_support.jl")
+    if id == "N05-N06"
+        append!(required,["N05.jl","simulate.jl","analyze.jl","plot.jl","provided_support.jl"])
+        isfile(joinpath(root,"src","N06Advection.jl")) || push!(missing,"src/N06Advection.jl")
+    end
+    if id == "N07"
+        append!(required,["simulate.jl","analyze.jl","plot.jl","provided_support.jl"])
+        isfile(joinpath(root,"src","N07Transport.jl")) || push!(missing,"src/N07Transport.jl")
+    end
+    if id == "N08-N09"
+        append!(required,["simulate.jl","analyze.jl","plot.jl","provided_support.jl"])
+        isfile(joinpath(root,"src","N08N09Elliptic.jl")) || push!(missing,"src/N08N09Elliptic.jl")
+    end
+    for name in required
+        relative = joinpath(directory, name)
+        isfile(joinpath(root, relative)) || push!(missing, relative)
+    end
+    isempty(missing) || throw(ArgumentError(
+        "$id の教材が揃っていません: $(join(missing, ", "))。現在の課題を続け、教員に配布状況を確認してください",
+    ))
+    nothing
+end
+
 function units_to_test(state::ProgressState)
     _validate(state)
     filter(!=("F00"), vcat(state.completed, [state.current]))
@@ -119,12 +147,10 @@ end
 
 function validate_transition(state::ProgressState, id)
     _validate(state)
-    current_index = findfirst(==(state.current), state.ordered)
-    current_index == length(state.ordered) &&
-        throw(ArgumentError("$(state.current)は最後の提出単位です"))
-    expected = state.ordered[current_index + 1]
-    id == expected ||
-        throw(ArgumentError("次の提出単位は`$expected`です。指定された値: `$id`"))
+    id in state.ordered ||
+        throw(ArgumentError("不明な提出単位です: `$id`"))
+    id != "F00" ||
+        throw(ArgumentError("F00の環境確認にはpreflightを使用してください"))
     nothing
 end
 
