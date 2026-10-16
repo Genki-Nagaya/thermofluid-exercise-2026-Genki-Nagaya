@@ -1,12 +1,15 @@
 include(joinpath(@__DIR__, "lib", "CourseWorkflow.jl"))
 include(joinpath(@__DIR__, "lib", "ResultLimits.jl"))
+include(joinpath(@__DIR__, "lib", "CourseTests.jl"))
 include(joinpath(@__DIR__, "..", "exercises", "F00_environment", "run.jl"))
 
 using .CourseWorkflow
 using .F00Environment
 using .ResultLimits
+using .CourseTests
 
 const SLUGS = Dict(
+    "F01" => "first-pull-request",
     "F02" => "julia-arrays-and-tests",
     "F03-F04" => "vector-calculus-numerical-differentiation",
     "N01" => "linear-advection",
@@ -29,7 +32,7 @@ const USAGE = """
   julia --project=. $(joinpath("scripts", "course.jl")) start F02
   julia --project=. $(joinpath("scripts", "course.jl")) start F03-F04
 
-必要な教材が配布済みの、次の提出単位だけを開始できます。
+必要な教材が配布済みの任意の提出単位を開始できます。F00の環境確認にはpreflightを使用してください。
 """
 
 git_output(root, arguments...) = readchomp(Cmd(`git $(arguments)`; dir=root))
@@ -50,16 +53,7 @@ function require_result_limits(root)
 end
 
 function require_local_tests(root)
-    runner = joinpath("test", "runtests.jl")
-    command = Cmd(Cmd([
-        Base.julia_cmd().exec...,
-        "--startup-file=no",
-        "--project=.",
-        runner,
-    ]); dir=root)
-    process = run(ignorestatus(command))
-    process.exitcode == 0 ||
-        throw(ArgumentError("ローカルテストが失敗しました。test/runtests.jlを確認してから次へ進んでください"))
+    run_course_tests(root; policy=:advance) || error("共通検査が失敗しました。進捗は更新しません")
     nothing
 end
 
@@ -67,7 +61,7 @@ function show_status(root)
     state = load_progress(joinpath(root, "course_progress.toml"))
     completed = isempty(state.completed) ? "なし" : join(state.completed, ", ")
     println("現在の提出単位: $(state.current)")
-    println("完了済み: $completed")
+    println("通過済み: $completed")
     if state.current == "F00"
         println("環境診断: julia --project=. scripts/course.jl preflight")
         return
@@ -77,26 +71,23 @@ function show_status(root)
     end
     directory = unit_directory(state.current)
     println("開くフォルダ: $directory/")
-    println("編集するファイル: run.jl、tests.jl、learning_log.md")
+    if state.current == "N05-N06"
+        println("編集するファイル: src/、analyze.jl、plot.jl、tests.jl、learning_log.md")
+    elseif state.current == "N07"
+        println("編集するファイル: src/N07Transport.jl、analyze.jl、tests.jl、learning_log.md（表示はplot.jl）")
+    elseif state.current == "N08-N09"
+        println("編集するファイル: src/N08N09Elliptic.jl、tests.jl、learning_log.md（計算simulate.jl、解析analyze.jl、表示plot.jl）")
+        println("授業内: julia --project=. $(joinpath(directory,"tests.jl")) N08-check（N08の4関数のみ。全体完了ではありません）")
+        println("N08単独: julia --project=. $(joinpath(directory,"run.jl")) N08")
+        println("全体: julia --project=. $(joinpath(directory,"run.jl")) all")
+        println("発展はextensions/の独立コマンドです。必修の完了には要求しません")
+        println("src編集後: julia --project=. exercises/N05-N06_common_package_2d_advection/N05.jl verify → Pkg.test()")
+    else
+        println("編集するファイル: run.jl、tests.jl、learning_log.md")
+    end
     state.current in ("N05-N06", "N07", "N08-N09") && println("共通コード: src/")
     println("実行: julia --project=. $(joinpath(directory, "run.jl"))")
     println("テスト: julia --project=. -e 'using Pkg; Pkg.test()'")
-end
-
-function require_unit_assets(root, id)
-    missing = String[]
-    directory = unit_directory(id)
-    required = ["run.jl", "tests.jl", "learning_log.md"]
-    id == "F03-F04" && push!(required, "F03.jl")
-    id == "N01" && push!(required, "provided_support.jl")
-    for name in required
-        relative = joinpath(directory, name)
-        isfile(joinpath(root, relative)) || push!(missing, relative)
-    end
-    isempty(missing) || throw(ArgumentError(
-        "$id の教材が揃っていません: $(join(missing, ", "))。現在の課題を続け、教員に配布状況を確認してください",
-    ))
-    nothing
 end
 
 function start_exercise(root, id; persist_progress=save_progress)
@@ -115,7 +106,7 @@ function start_exercise(root, id; persist_progress=save_progress)
     advanced = ProgressState(
         state.schema_version,
         state.ordered,
-        vcat(state.completed, [state.current]),
+        state.ordered[1:(findfirst(==(id), state.ordered) - 1)],
         id,
     )
     try
