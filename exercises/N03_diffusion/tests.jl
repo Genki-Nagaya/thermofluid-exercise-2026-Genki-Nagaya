@@ -4,7 +4,7 @@
 using Test
 
 # 単独実行時は読み込み、Pkg.test などで読込済みなら既存のモジュールを使う。
-if !isdefined(Main,:N03Diffusion)
+if !isdefined(Main, :N03Diffusion)
     include(joinpath(@__DIR__, "run.jl"))
 end
 import .N03Diffusion
@@ -59,11 +59,50 @@ import .N03Diffusion
 end
 
 @testset "N03 自作テスト" begin
-    # TODO(自作): 非対称な非定数配列を複数ステップ進め、断熱の台形則熱量保存を確認する。
-    # 初期熱量を独立に計算し、点数・ステップ数・値の大きさから許容誤差を決める。
-    @test false
+    @testset "断熱の台形則熱量保存（複数ステップ）" begin
+        # 端点同士・端点と内部で値が異なる非対称配列（左右反転で一致しない）
+        u0 = [0.3, 1.7, 0.2, 2.9, 1.1, 0.6]
+        dx, D = 0.1, 1.0
+        dt = 0.4 * dx^2 / D          # r = 0.4（安定範囲内）
+        nsteps = 50
 
-    # TODO(自作): 固定温度の正弦解析解と41・81・161点の数値解を同時刻・同じfoで比較する。
-    # 誤差の減少と観測次数を確認し、指標・許容範囲・検出限界を説明する。
-    @test false
+        # 初期熱量を run.jl とは別の書き方（区間ごとの台形の和）で計算する
+        H0_indep = dx * sum((u0[i] + u0[i+1]) / 2 for i in 1:(length(u0)-1))
+        @test H0_indep ≈ 0.635                       # 手計算: 0.1*(0.45+5.9)
+        @test N03Diffusion.thermal_content(u0, dx) ≈ H0_indep
+
+        # 新旧バッファを交換しながら複数ステップ進める
+        u_old, u_new = copy(u0), similar(u0)
+        for _ in 1:nsteps
+            N03Diffusion.diffusion_step!(u_new, u_old, dt, dx, D; boundary=:insulated)
+            u_old, u_new = u_new, u_old
+        end
+
+        # 許容誤差：1ステップ・1点あたり丸め eps 程度 × 点数 × ステップ数 × 値の大きさ × 領域長
+        tol = nsteps * length(u0) * eps(Float64) * maximum(abs, u0) * (length(u0) - 1) * dx
+        @test abs(N03Diffusion.thermal_content(u_old, dx) - H0_indep) <= tol   # tol ≈ 9.7e-14
+
+        # 分布が実際に変化したこと（何も更新しない誤実装でも保存は成り立ってしまうため）
+        @test maximum(abs, u_old .- u0) > 0.1
+    end
+
+    @testset "固定温度の正弦解析解と格子収束" begin
+        D, t_final = 0.1, 1.0
+        errors = Float64[]
+        for nx in (41, 81, 161)
+            r = N03Diffusion.simulate(; boundary=:fixed, initial=:mode, nx, fo=0.4, t_final)
+            @test r.fo ≈ 0.4             # 3格子で同じ実効Fourier数（Δt ∝ Δx²）
+            # 解析解を provided の関数に頼らず独立に書く
+            exact = exp(-D * (pi / 2)^2 * t_final) .* sin.(pi .* r.x ./ 2)
+            push!(errors, maximum(abs.(r.u .- exact)))
+        end
+
+        # 格子を細かくすると誤差が単調に減る
+        @test errors[1] > errors[2] > errors[3]
+        # 観測次数 p = log2(E_coarse/E_fine) が約2（実測 2.001, 2.000）
+        p = [log2(errors[i] / errors[i+1]) for i in 1:2]
+        @test all(1.8 .< p .< 2.2)
+        # 絶対値の確認：81点で約 3.47e-5（授業ページの値）
+        @test 3.0e-5 < errors[2] < 4.0e-5
+    end
 end
