@@ -26,8 +26,7 @@ function student_greeting(name::AbstractString)::String
     normalized_name = strip(name)
     isempty(normalized_name) && throw(ArgumentError("名前を空にはできません"))
 
-    # TODO(F01): `Hello, <normalized_name>!`を返す処理を実装する。
-    error("未実装 F01: student_greeting")
+    "Hello, $(normalized_name)!"
 end
 
 """
