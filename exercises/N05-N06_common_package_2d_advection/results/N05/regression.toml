@@ -1,5 +1,5 @@
 baseline_sha256 = "cfcce52c5521b5eb94be022507bd92c4f0b3ac446f18a8dd5b92cb25c3c15162"
-git_head = "bf6f33a05b04f146b5e69807fa7da2c30aecfc4e"
+git_head = "ef75acf931722646f44d717eaa14a792eba3ae51"
 schema_version = 1
 selected_model = "linear"
 
@@ -18,7 +18,7 @@ selected_model = "linear"
 "exercises/N04_advection_diffusion/tests.jl" = "53f5ecc9d9ca5f46d4bfb6bcc0051212a9a5b1996658d9bdb99e08c94cfdb4ba"
 "src/N06Advection.jl" = "3a9574f260fccb26e7f94c29ae8ec9c5d441614ae8b19a009af8f2911c4daf21"
 "src/N07Transport.jl" = "5e968ed12db94a2552085d1f06ecd6a781a491d3ba0bc718dc19e42906474823"
-"src/N08N09Elliptic.jl" = "8c9c24a80840ef1ad32c771d9777fe9d5a0681474b35c9a3b08ce3dccb370848"
+"src/N08N09Elliptic.jl" = "7327b90aaf200c3319ed52951bd842364846c956146325e58e1cb5c5a8b8923c"
 "src/ThermofluidExercise.jl" = "a158b3ec781e04be230a780ff310dbf40593131778a90b10d7345e749b82c39e"
 
 [differences]
