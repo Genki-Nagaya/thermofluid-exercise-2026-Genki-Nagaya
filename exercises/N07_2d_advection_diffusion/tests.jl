@@ -166,11 +166,117 @@ end
 @testset "N07 自作: 開境界2条件の辺別熱収支" begin
     # TODO(自作): 複数ステップで辺別・移流/拡散別の積算、熱量変化、断熱壁を検証する。
     # 入力と独立期待値、許容値の根拠を記す。公式出力は上書きしない。
-    @test false
+    # 入力: 非対称な5×4場、dx≠dy、左流入T_in=1・右流出・上下壁(固定0/断熱)。15ステップ。
+    # 独立期待値: 各stepの旧温度から、課題表の境界流束を流入正・辺長つきでテスト内に直接書いた式。
+    # 許容値: 値はO(1)、20セル×15stepの加算の丸めは1e-14程度なので、1e-12で十分に余裕がある。
+    T0 = [0.2 0.5 0.9 0.3; 0.7 0.1 0.4 0.8; 0.6 0.95 0.25 0.45; 0.35 0.75 0.55 0.15; 0.85 0.05 0.65 0.5]
+    dx, dy, cx, kappa, Tin, nsteps = 0.3, 0.2, 1.2, 0.04, 1.0, 15
+    nx, ny = size(T0)
+    for wall in (:dirichlet, :insulated)
+        bc = N.channel_boundaries(wall)
+        dt = N.thermal_stable_timestep(cx, 0., kappa, dx, dy, bc)
+        # 半セルの係数3が両軸に入るかどうかで刻みが変わることも確かめる。
+        ay = wall == :dirichlet ? 3 : 2
+        @test dt ≈ 0.8 / (cx / dx + kappa * (3 / dx^2 + ay / dy^2))
+        u = copy(T0)
+        v = similar(u)
+        got = Dict((m, s) => 0.0 for m in (:advective, :diffusive), s in N.SIDES)
+        want = copy(got)
+        heat = [dx * dy * sum(u)]
+        for _ in 1:nsteps
+            # 表の外向き流束を内向き正へ反転し、面の長さ(西東dy・南北dx)を掛けた独立の期待値。
+            want[(:advective, :west)] += dt * dy * ny * cx * Tin
+            want[(:advective, :east)] += dt * (-dy * cx * sum(u[nx, :]))
+            want[(:diffusive, :west)] += dt * dy * sum(2kappa * (Tin .- u[1, :]) / dx)
+            if wall == :dirichlet
+                want[(:diffusive, :south)] += dt * (-dx * sum(2kappa * u[:, 1] / dy))
+                want[(:diffusive, :north)] += dt * (-dx * sum(2kappa * u[:, ny] / dy))
+            end
+            r = N.thermal_step!(v, u, dt, dx, dy; cx, cy = 0., kappa, bc)
+            for m in (:advective, :diffusive), s in N.SIDES
+                got[(m, s)] += dt * getproperty(getproperty(r.boundary_rates, m), s)
+            end
+            # 断熱壁・流出端の拡散と、上下壁の移流は毎stepちょうど0。
+            @test r.boundary_rates.diffusive.east == 0.0
+            @test r.boundary_rates.advective.south == r.boundary_rates.advective.north == 0.0
+            wall == :insulated &&
+                @test r.boundary_rates.diffusive.south == r.boundary_rates.diffusive.north == 0.0
+            u, v = v, u
+            push!(heat, dx * dy * sum(u))
+        end
+        for k in keys(want)
+            @test got[k] ≈ want[k] atol = 1e-12
+        end
+        # 辺別・機構別の累積の総和が熱量変化と一致する（熱収支）。
+        @test heat[end] - heat[1] ≈ sum(values(got)) atol = 1e-12
+        # 固定温度の壁は正温度の場から熱を奪い、断熱との違いが出る。
+        wall == :dirichlet && @test got[(:diffusive, :south)] < -1e-3
+        # 区間積分(5step×3区間)をheat_budgetへ渡し、残差が丸め誤差内であることも確認する。
+        adv = zeros(4, 3)
+        dif = zeros(4, 3)
+        u = copy(T0)
+        for k in 1:3, _ in 1:5
+            r = N.thermal_step!(v, u, dt, dx, dy; cx, cy = 0., kappa, bc)
+            adv[:, k] .+= dt .* collect(r.boundary_rates.advective)
+            dif[:, k] .+= dt .* collect(r.boundary_rates.diffusive)
+            u, v = v, u
+        end
+        b = N07Analysis.heat_budget(collect(0:3) .* 5dt, heat[1:5:16], adv, dif)
+        @test maximum(abs, b.residual) <= 1e-12
+        @test b.cumulative_input[end] ≈ sum(values(got)) atol = 1e-12
+    end
 end
 @testset "N07 自作: 温度とBurgersの解析解収束" begin
     # TODO(自作): 周期温度の拡散・合成と二成分Burgersを3格子で計算し、誤差と両区間の次数を検証する。
-    @test false
+    # 公式出力を使わず、t=0.5(公式は1)までテスト内で時間ループを回す。誤差はRMS(課題のE_T,E_B)。
+    # 期待値: 拡散と閉じた固定温度は2次(1.8<=p<=2.2)、移流を含む温度とBurgersは1次風上なので0.8<=p<=1.2。
+    grids = ((40, 30), (80, 60), (160, 120))
+    tf = 0.5
+    function temperature_error(id, nx, ny)
+        c = thermal_config(id)
+        dx, dy = 2 / nx, 1 / ny
+        x, y = cell_centers(nx, 2.), cell_centers(ny, 1.)
+        a = exact_temperature(x, y, 0., id)
+        b = similar(a)
+        dtmax = N.thermal_stable_timestep(c.cx, c.cy, c.kappa, dx, dy, c.bc)
+        t = 0.
+        while t < tf
+            dt = min(dtmax, tf - t)
+            N.thermal_step!(b, a, dt, dx, dy; cx = c.cx, cy = c.cy, kappa = c.kappa, bc = c.bc)
+            a, b = b, a
+            t += dt
+        end
+        sqrt(sum(abs2, a - exact_temperature(x, y, tf, id)) / (nx * ny))
+    end
+    function burgers_error(nx, ny)
+        dx, dy = 2 / nx, 1 / ny
+        x, y = cell_centers(nx, 2.), cell_centers(ny, 1.)
+        u, v = exact_burgers(x, y, 0.)
+        un, vn = similar(u), similar(v)
+        t = 0.
+        while t < tf
+            dt = min(N.burgers_stable_timestep(u, v, 0.05, dx, dy), tf - t)
+            N.burgers_step!(un, vn, u, v, dt, dx, dy; nu = 0.05)
+            u, un = un, u
+            v, vn = vn, v
+            t += dt
+        end
+        ue, ve = exact_burgers(x, y, tf)
+        sqrt((sum(abs2, u - ue) + sum(abs2, v - ve)) / (nx * ny))
+    end
+    cases = (
+        ("periodic_diffusion", (1.8, 2.2)),
+        ("closed_fixed", (1.8, 2.2)),
+        ("periodic_combined", (0.8, 1.2)),
+        ("burgers", (0.8, 1.2)),
+    )
+    for (id, (plo, phi)) in cases
+        e = [id == "burgers" ? burgers_error(g...) : temperature_error(id, g...) for g in grids]
+        p = log2.(e[1:2] ./ e[2:3])
+        @test all(>(0), e)             # 誤差が0なら比較が無意味（解析解をそのまま返す誤りを検出）
+        @test e[1] > e[2] > e[3]       # 格子を細かくすると単調に減る
+        @test all(q -> plo <= q <= phi, p)   # 両区間の観測次数
+    end
 end
 @testset "N07 保存結果と来歴" begin
     @test check_complete()

@@ -31,7 +31,11 @@ include("provided_support.jl")
 function heat_budget(time, heat, advective_integrals, diffusive_integrals)
     validate_budget(time, heat, advective_integrals, diffusive_integrals)
     # TODO(N07): 各区間の正味流入、累積流入、初期熱量からの変化との差を求める。
-    error("未実装 N07: heat_budget")
+    # 積分は各stepのレート×刻みを区間に累積済みなので、ここでは刻みを掛けずに4辺・2機構を足す。
+    net_input = vec(sum(advective_integrals; dims = 1) .+ sum(diffusive_integrals; dims = 1))
+    cumulative_input = [0.0; cumsum(net_input)]
+    residual = (heat .- heat[1]) .- cumulative_input
+    (; net_input, cumulative_input, residual)
 end
 
 """
