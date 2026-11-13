@@ -35,12 +35,45 @@ end
     @test new≈[1.6 1.7 3.4 3.3; 5.9 6.4 6.3 7.4; 9.6 9.7 11.4 11.3]
 end
 @testset "N06 自作: 複数ステップの保存量" begin
-    # TODO: 非対称・非定数場を複数ステップ進め、保存量を確認する。
-    @test false
+    # x,yで形も格子数も異なる非定数場を20ステップ進める。周期境界の保存形なので総和は不変、
+    # 合成CFL<=1では更新が旧値の凸結合になるため、最小・最大は初期値の範囲を出ない。
+    N = ThermofluidExercise.N06
+    nx, ny, dx, dy = 7, 5, 0.3, 0.2
+    u0 = [sin(0.9i) + 0.3j^2 + 0.1i * j for i in 1:nx, j in 1:ny]
+    saved = copy(u0)
+    dt = N.stable_timestep(1.3, 0.4, dx, dy)
+    a, b = copy(u0), similar(u0)
+    for _ in 1:20
+        N.advection_step!(b, a, dt, dx, dy; cx = 1.3, cy = 0.4)
+        a, b = b, a
+    end
+    @test u0 == saved
+    @test a != u0
+    @test sum(a)≈sum(u0) rtol = 1e-13
+    @test minimum(u0) - 1e-13 <= minimum(a) && maximum(a) <= maximum(u0) + 1e-13
+    # Cx=1, Cy=0 では風上更新が1格子の厳密なシフトになり、x方向の周期左隣を取り違えると一致しない。
+    N.advection_step!(b, u0, dx / 1.3, dx, dy; cx = 1.3, cy = 0.)
+    @test b≈circshift(u0, (1, 0)) atol = 1e-13
+    N.advection_step!(b, u0, dy / 0.4, dx, dy; cx = 0., cy = 0.4)
+    @test b≈circshift(u0, (0, 1)) atol = 1e-13
 end
+include("simulate.jl")
 @testset "N06 自作: 3格子の解析解誤差と収束" begin
-    # TODO: 公式3格子で誤差が減少し、両区間が約1次収束することを確認する。
-    @test false
+    # 公式3格子をt=1まで計算し、解析解との二乗平均誤差を比べる。
+    # 一次風上差分なので、格子を半分にするごとに誤差はおよそ半分（観測次数≈1）になるはずである。
+    S = N06Simulation
+    errors = Float64[]
+    for (nx, ny) in S.OFFICIAL_GRIDS
+        c = S.simulate_case(nx, ny)
+        @test c["time"][end] == 1.
+        exact = S.exact_field(c["x"], c["y"], 1.)
+        push!(errors, sqrt(sum(abs2, c["u"][:, :, end] - exact) / (nx * ny)))
+    end
+    orders = log2.(errors[1:(end - 1)] ./ errors[2:end])
+    @test all(>(0), errors)
+    @test all(diff(errors) .< 0)
+    @test all(0.8 .<= orders .<= 1.2)
+    println("N06 3格子: L2誤差 = ", errors, ", 観測次数 = ", orders)
 end
 module N0506OutputChecks
 include("provided_support.jl")

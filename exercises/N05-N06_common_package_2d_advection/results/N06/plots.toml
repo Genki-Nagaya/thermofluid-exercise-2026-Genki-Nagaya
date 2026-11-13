@@ -1,0 +1,9 @@
+color_limits = [0.4, 1.6]
+colormap = "plasma"
+display_case = "n040x030"
+error_colormap = "RdBu"
+mass_display_scale = 1.0e-15
+schema_version = 1
+source_fields_sha256 = "82598bb1581a53ef91317aa85fb5cde6a5c67424931f9e03c33a60785ff24d32"
+source_summary_sha256 = "1f6bcc49e7cb9dccad87090c4137b7dcc84bf9aa9edb4534dbb05cf9eb2e1f4d"
+time = [0.0, 1.0]

@@ -2,6 +2,7 @@
 # 読む順: 流束 → 添字 → 1ステップ → 境界 → simulate → main。
 module N02NonlinearAdvection
 include("provided_support.jl")
+import ThermofluidExercise
 export burgers_flux,
     periodic_left_index, nonlinear_upwind_step!, apply_boundary!, simulate, main
 
@@ -26,8 +27,7 @@ N02授業の保存形Burgers流束を、配列全体ではなく1点のスカラ
 有限性検証は提供済み。配布状態では検証後に未実装エラーで停止する。
 """
 function burgers_flux(u::Real)
-    isfinite(u) || throw(ArgumentError("流束の入力を有限値にしてください"))
-    return u^2 / 2
+    return ThermofluidExercise.burgers_flux(u)
 end
 
 """
@@ -52,9 +52,7 @@ end
 入力検証は提供済み。N02の周期境界を参照する。配布状態では検証後に未実装エラーで停止する。
 """
 function periodic_left_index(i::Integer, n::Integer)
-    (i isa Bool || n isa Bool || n < 1 || !(1 <= i <= n)) &&
-        throw(ArgumentError("添字は1 <= i <= n、点数はn >= 1の整数です（Bool不可）"))
-    return i == 1 ? n : i - 1
+    return ThermofluidExercise.periodic_left_index(i, n)
 end
 
 """
@@ -83,16 +81,7 @@ end
 新旧は同じ記憶領域を共有せず、全点で更新前の値を読む。N02授業の保存形更新を参照する。配布状態では更新範囲内の未実装エラーで停止する。
 """
 function nonlinear_upwind_step!(u_new, u_old, dt::Real, dx::Real; boundary=:fixed)
-    # 計算や書込みの前に、入力条件をまとめて確認する。
-    validate_step_inputs(u_new, u_old, dt, dx, boundary)
-    copyto!(u_new, u_old)
-    indices = boundary == :periodic ? (1:length(u_old)) : (2:(length(u_old)-1))
-    for i in indices
-        left = boundary == :periodic ? periodic_left_index(i, length(u_old)) : i - 1
-        u_new[i] = u_old[i] - dt / dx * (burgers_flux(u_old[i]) - burgers_flux(u_old[left]))
-    end
-    all(isfinite, u_new) || error("更新後に非有限値があります。更新式を確認してください")
-    return u_new
+    return ThermofluidExercise.N02.nonlinear_upwind_step!(u_new, u_old, dt, dx; boundary)
 end
 
 """
@@ -112,14 +101,7 @@ end
 入力 `u`。固定の場合は左端を1、右端を左隣の値に書き換える。
 """
 function apply_boundary!(u; boundary=:fixed)
-    # 計算や書込みの前に、入力条件をまとめて確認する。
-    validate_boundary(boundary)
-    length(u) >= 3 || throw(ArgumentError("境界配列には3点以上が必要です"))
-    if boundary == :fixed
-        u[1] = 1.0
-        u[end] = u[end-1]
-    end
-    return u
+    return ThermofluidExercise.N02.apply_boundary!(u; boundary)
 end
 
 """
