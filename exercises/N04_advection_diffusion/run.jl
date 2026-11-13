@@ -3,6 +3,7 @@
 module N04AdvectionDiffusion
 const SELECTED_MODEL = :linear
 include("provided_support.jl")
+import ThermofluidExercise
 export SELECTED_MODEL,
     advective_flux,
     stable_timestep,
@@ -36,16 +37,7 @@ SELECTED_MODELで選んだ枝だけに、N01の線形流束またはN02のBurger
 モデル・有限性・速度の検証は提供済み。配布状態の `:unselected` はモデル検証で拒否され、選択済みの枝も未完成なら既存の未実装エラーで停止する。
 """
 function advective_flux(u; model=SELECTED_MODEL, speed=1.0)
-    # 計算や書込みの前に、入力条件をまとめて確認する。
-    validate_model(model)
-    finite_real(u, "u")
-    validate_speed(model, speed)
-    if model == :linear
-        return speed * u
-    else
-        nonnegative_finite(u, "非線形移流のu")
-        return u^2 / 2
-    end
+    return ThermofluidExercise.N04.advective_flux(u; model, speed)
 end
 
 """
@@ -72,9 +64,7 @@ end
 入力検証は提供済み。[N04課題「離散化と時間刻み」](https://t2lab-it.github.io/thermofluid-exercise-2026/assignments/N04.html#discretization)を参照する。配布状態では検証後に未実装エラーで停止する。
 """
 function stable_timestep(max_speed, dx, diffusivity; safety=0.8)
-    validate_timestep_inputs(max_speed, dx, diffusivity, safety)
-    # C + 2r ≤ 1 を Δt について解くと Δt ≤ 1/(a/Δx + 2D/Δx²)。これに安全係数を掛ける。
-    return safety / (max_speed / dx + 2diffusivity / dx^2)
+    return ThermofluidExercise.N04.stable_timestep(max_speed, dx, diffusivity; safety)
 end
 
 """
@@ -124,24 +114,9 @@ function advection_diffusion_step!(
     advection=true,
     speed=1.0,
 )
-    # 計算や書込みの前に、入力条件をまとめて確認する。
-    validate_step(u_new, u_old, dt, dx, diffusivity, model, advection, speed)
-    for i in eachindex(u_old)
-        n = length(u_old)
-        im = i == 1 ? n : i - 1          # 周期の左隣（先頭では末尾）
-        ip = i == n ? 1 : i + 1          # 周期の右隣（末尾では先頭）
-
-        # 移流：保存形の風上差分（u ≥ 0 なので左側が風上）
-        adv = advection ?
-              dt / dx * (advective_flux(u_old[i]; model, speed) -
-            advective_flux(u_old[im]; model, speed)) : 0.0
-
-        # 拡散：中心差分（diffusivity = 0 なら自動的に0）
-        dif = diffusivity * dt / dx^2 * (u_old[ip] - 2u_old[i] + u_old[im])
-
-        u_new[i] = u_old[i] - adv + dif
-    end
-    return u_new
+    return ThermofluidExercise.N04.advection_diffusion_step!(
+        u_new, u_old, dt, dx, diffusivity; model, advection, speed,
+    )
 end
 
 """
